@@ -9,8 +9,9 @@
 */
 let
 
+  inherit (lib) nameValuePair;
   inherit (lib.strings) substring;
-  inherit (lib.lists) imap0 isList foldr;
+  inherit (lib.lists) imap0 isList foldr foldl;
 
   testType = { EQUALS = "EQUALS"; };
 
@@ -18,84 +19,51 @@ let
     let
       idHash =
         substring 0 10 (builtins.hashString "sha256" "${entropy}:${message}");
-    in "${entropy}::${idHash}::${message}";
+    in "${entropy}::${idHash}";
+in rec {
+  treeMap = fn: testMatrix:
+    foldl (acc: item:
+      if (item.__test__ == "__test_branch__") then
+        acc ++ [ (treeMap fn item) ]
+      else
+        acc ++ [ (fn item) ]) [ ] testMatrix.value;
 
-  checkFunctions = {
-    equals = expression: message: value: {
-      __test__ = "__test_leaf__";
-      type = testType.EQUALS;
-      id = generateTestId message;
-      left = value;
-      right = expression;
-      inherit message;
-    };
-    # isTrue = message: value: expression: {
-    #   __test_type__ = "__test_true__";
-    #   left = value;
-    #   right = true;
-    # };
-    # isFalse = message: value: expression: {
-    #   __test_type__ = "__test_false__";
-    #   left = value;
-    #   right = false;
-    # };
+  countTests = testMatrix:
+    foldl (acc: item:
+      if (item.__test__ == "__test_branch__") then
+        acc + (countTests item)
+      else
+        acc + 1) 0 testMatrix.value;
+
+  Assertion.equals = left: right: {
+    type = testType.EQUALS;
+    inherit left right;
+    __test__ = "__assertion__";
   };
 
-in rec {
-  # matrixMap = fn: list:
-  #   map (item: if isList item then matrixMap fn item else fn item) list;
+  # TestCase
+  TestCase = message: assertionFunctor: cntr:
+    let id = generateTestId message cntr;
+    in {
+      __test__ = "__test_case__";
+      value = assertionFunctor;
+      inherit id message;
+    };
 
-  treeMap = node:
-    if (isList node) then
-      map (item: treeMap item) node
-    else
-      (if node.__test__ == "__test_branch__" then {
-        name = node.id;
-        value = (treeMap node.value);
-      } else {
-        name = node.id;
-        value = { inherit (node) type left right; };
-      });
+  TestBlock = message: testMatrix: cntr:
+    let id = generateTestId message cntr;
+    in {
+      __test__ = "__test_branch__";
+      inherit id message;
+      value =
+        imap0 (idx: fn: (fn "${toString cntr}-${toString idx}")) testMatrix;
+    };
 
-  # map (item:
-  #   if (isList item) then
-  #     treeMap item
-  #   else
-  #     (if (item.__test__ == "__test_branch__") then
-  #       treeMap item.value
-  #     else
-  #       item.id)) tree;
+  Test = message: testMatrix:
+    let testTree = (imap0 (idx: fn: fn "${toString idx}") testMatrix);
+    in {
+      __test__ = "__test_root__";
+      value = testTree;
+    };
 
-  mkTest = expression: message: testFunctor:
-    let
-      testTree = imap0 (idx: fn: fn expression "${toString idx}") (testFunctor {
-        test = message: exprFunctor: expression: cntr:
-          exprFunctor {
-            is.equal.to = value: expression: {
-              __test__ = "__test_leaf__";
-              type = testType.EQUALS;
-              id = generateTestId message cntr;
-              left = value;
-              right = expression;
-              inherit message;
-            };
-          } expression;
-
-        refine = message: refineFunction: refineFunctor: expression: cntr:
-          imap0 (idx: fn: {
-            __test__ = "__test_branch__";
-            id = generateTestId message cntr;
-            inherit message;
-            value = let
-              refinedTestList = (fn (refineFunction expression)
-                "${toString cntr}-${toString idx}");
-            in refinedTestList;
-          }) refineFunctor;
-      });
-
-    in treeMap testTree;
-
-  #    // {
-  #   __test__ = "__test_root__";
-  # };
 }

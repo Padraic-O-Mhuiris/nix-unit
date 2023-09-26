@@ -26,21 +26,27 @@
         };
 
         nuLib = import ./nix { inherit lib; };
+
+        inherit (nuLib) Test TestCase TestBlock Assertion;
       in {
         inherit lib;
         inherit nuLib;
 
-        testResult = nuLib.mkTest testExpr "MyTest" ({ test, refine }: [
-          (refine "some label" ({ y, ... }: y) [
-            (refine "some other label" ({ z, ... }: z)
-              [ (test "knknknk" (expr: expr.is.equal.to 3)) ])
-            (refine "some other other label" ({ z, ... }: z)
-              [ (test "knknknk" (expr: expr.is.equal.to 3)) ])
-            (test "y should be equal to name value pair of z and 3"
-              (expr: expr.is.equal.to { z = 3; }))
-          ])
-          (test "x should be equal to 2" (expr: expr.is.equal.to 2))
-        ]);
+        test = Test "MyTest" [
+          (TestCase "TestCase 0" (Assertion.equals testExpr { a = 3; }))
+          (TestBlock "TestCase 1" (let inherit (testExpr) y;
+          in [
+            (TestCase "TestCase 1-0" (Assertion.equals y { a = 3; }))
+            (TestCase "TestCase 1-1" (Assertion.equals y { a = 3; }))
+            (TestCase "TestCase 1-2" (Assertion.equals y { a = 3; }))
+            (TestCase "TestCase 1-3" (Assertion.equals y { a = 3; }))
+            (TestCase "TestCase 1-4" (Assertion.equals y { a = 3; }))
+            (TestCase "TestCase 1-5" (Assertion.equals y { a = 3; }))
+            (TestCase "TestCase 1-6" (Assertion.equals y { a = 3; }))
+            (TestCase "TestCase 1-7" (Assertion.equals y { a = 3; }))
+            (TestCase "TestCase 1-8" (Assertion.equals y { a = 3; }))
+          ]))
+        ];
 
         githubActions = nix-github-actions.lib.mkGithubMatrix {
           checks = {
